@@ -1,10 +1,15 @@
 package com.example.quiz14.service.impl;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -29,6 +34,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.transaction.Transactional;
 
+@EnableScheduling
 @Service
 public class QuizServiceImpl implements QuizService {
 	
@@ -39,7 +45,14 @@ public class QuizServiceImpl implements QuizService {
 
 	@Autowired
 	private QuestionDao questionDao;
-
+	
+	/**
+	 * 1. @CacheEvict: 清除暫存資料，用於資料有變動時(Create，Update，Delete)
+	 * 2. 只有 cacheNames 沒有 key，會把 cacheNames 就是 getAll 的所有暫存資料清除</br>
+	 * 3. 如果是 cacheNames + key，則是只清除特定的暫存資料； key 的參數值一樣使用 #p0 來表示，但通常不會只清除特定資料</br>
+	 * 4. allEntries: 強制刪除指定的 cacheNames 底下所有 key 對應的暫存資料，預設是 false
+	 */
+	@CacheEvict(cacheNames = "getAll", allEntries = true)
 	@Transactional(rollbackOn = Exception.class)
 	@Override
 	public BasicRes create(CreateReq req) throws Exception {
@@ -107,8 +120,10 @@ public class QuizServiceImpl implements QuizService {
 		return null;
 	}
 
+	@Cacheable(cacheNames = "getAll", key = "")
 	@Override
 	public SearchRes getAll() {
+		System.out.println("=========================");
 		return new SearchRes(ResMessage.SUCCESS.getCode(), //
 				ResMessage.SUCCESS.getMessage(), quizDao.selectAll());
 	}
@@ -226,6 +241,16 @@ public class QuizServiceImpl implements QuizService {
 				ResMessage.SUCCESS.getMessage());
 	}
 
+	/**
+	 * 1. key 等號後面的字串，因為 req 是物件，使用 #req 會取不到參數值，簡單點的方法是使用位置 #p0 來表示方法中第一個參數</br>
+	 * 2. 參數若是 class 時，可使用點(.)來取得類別中的屬性</br>
+	 * 3. 多參數的串接，不使用 concat，直接在字串中使用加號(+)串多個參數</br>
+	 * 4. 字串中使用單引號來表示字串，符號的串接也要使用加號(+)</br>
+	 * 5. 串接值的資料型態不是 String 時，可以使用 .toString() 轉換</br>
+	 * 6. #result: 表示方法返回的結果；即使是不同方法有不同的返回資料型態，也通用</br>
+	 * 7. unless 可以翻成排除的意思，後面的字串是指會排除符合條件的 --> 排除 res 不成功，即只暫存成功時的資料
+	 */
+	@Cacheable(cacheNames = "getAll", key = "#p0.quizName + '-' + #p0.startDate.toString()")
 	@Override
 	public SearchRes getAll(SearchReq req) {
 		// 轉換參數值
@@ -253,5 +278,22 @@ public class QuizServiceImpl implements QuizService {
 		return new SearchRes(ResMessage.SUCCESS.getCode(), //
 						ResMessage.SUCCESS.getMessage(), resList);
 	}
+	
+	// fixedRate: 固定的時間間隔執行，單位是毫秒
+//	@Scheduled(fixedRate = 5000)
+	public void fixedRateTest() {
+		System.out.println(LocalDateTime.now());
+	}
+	
+	// fixedRateString: 透過${}的方式從設定檔(application.properties)取值
+//	@Scheduled(fixedRateString = "${fixed.rate}")
+	public void fixedRateStringTest() {
+		System.out.println(LocalDateTime.now());
+	}
 
+	// cron 後面的字串有6個單位，從左到右依序是 秒 分 時 日 月 星期幾，單位間要有空格
+	@Scheduled(cron = "* * * * * *")
+	public void cornTest() {
+		System.out.println(LocalDateTime.now());
+	}
 }
